@@ -57,7 +57,9 @@ class DiffBuilder:
             if child is None:
                 child = etree.SubElement(parent, part)
             parent = child
-        existing = parent.find(node.tag)
-        if existing is not None:
-            parent.remove(existing)
+        # A category path can match several sibling elements (a Junos list,
+        # e.g. multiple <name-server> entries). Append each as its own
+        # sibling — do not drop earlier same-tag matches, or a list category
+        # collapses to its last entry and drift on earlier entries goes
+        # undetected.
         parent.append(node)
