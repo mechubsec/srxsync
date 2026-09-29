@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from srxsync.inventory import Auth
 
@@ -13,7 +13,7 @@ class SecretError(RuntimeError):
 @dataclass(frozen=True)
 class Secret:
     username: str
-    password: str | None = None
+    password: str | None = field(default=None, repr=False)
     ssh_key_path: str | None = None
 
 

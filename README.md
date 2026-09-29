@@ -1,11 +1,24 @@
-# srxsync
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/mechub-mark.svg">
+    <img src="docs/assets/mechub-mark-light.svg" width="72" alt="mechub mark">
+  </picture>
+</p>
+
+<h1 align="center">srxsync</h1>
+
+<p align="center"><strong>Fleet sync for Juniper SRX firewalls</strong><br>
+<em>a mechub project — sovereign network-security automation</em></p>
+
+> **Unofficial / community project.** This repository is an independent, community-driven project. It is not affiliated with, endorsed by, sponsored by, or supported by Hewlett Packard Enterprise or Juniper Networks. "HPE", "Juniper", "SRX", "JUNOS", "Security Director" and "Juniper Mist" are trademarks of their respective owners and are used here only to describe what this software interoperates with. Please direct support and licensing questions about those products to the respective vendors.
 
 Keep a fleet of Juniper SRX firewalls in sync with a designated master SRX.
 Reads selected configuration sections from the master and pushes them to a
 list of target devices, with safety rails (`commit confirmed`), drift
 detection, and per-target include lists.
 
-Design spec: [`docs/superpowers/specs/2026-04-22-srxsync-design.md`](docs/superpowers/specs/2026-04-22-srxsync-design.md)
+The rustperformance branch has all this and a rust based communications option.  
+more complex to intall hence the need for both.
 
 ## Install
 
@@ -217,6 +230,42 @@ inventory in `inv.yaml` and prints a markdown table. See
 [`docs/superpowers/specs/2026-04-23-transport-benchmark-design.md`](docs/superpowers/specs/2026-04-23-transport-benchmark-design.md)
 for the exact measurement contract.
 
+## Branches
+
+Two tracks are maintained in parallel:
+
+- **`master`** — pure-Python reference implementation. Transport is
+  [PyEZ](https://github.com/Juniper/py-junos-eznc) (`jnpr.junos`) over
+  NETCONF/SSH. This is the stable, dependency-light branch; install with
+  `pip install -e .[dev]` and go.
+- **`rustperformance`** — hybrid Python/Rust. Adds a second transport
+  backend (`RustezTransport`) built on
+  [rustEZ](https://crates.io/crates/rustez) /
+  [rustnetconf](https://crates.io/crates/rustnetconf), selectable at
+  runtime via `--transport {pyez,rustez}`. The Rust backend ships as an
+  optional extra (`pip install -e .[rust,dev]`) and is validated against
+  PyEZ by a canonical-XML parity test plus a parametrized lab suite.
+  PyEZ remains the default.
+
+The two branches are intentionally **not** merged — `master` stays
+Rust-free for deployments that cannot or do not want to pull a Rust
+toolchain, while `rustperformance` is the opt-in performance track.
+
 ## License
 
-TBD.
+Licensed under [MIT](LICENSE).
+
+## Contributing
+
+Unless explicitly stated otherwise, contributions submitted for inclusion in this project are licensed under the [MIT License](LICENSE).
+
+---
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/mechub-mark.svg">
+    <img src="docs/assets/mechub-mark-light.svg" width="28" alt="">
+  </picture><br>
+  <sub><code>a mechub project</code> · deterministic decides · the model explains · a human approves<br>
+  <a href="https://github.com/fastrevmd-lab">github.com/fastrevmd-lab</a></sub>
+</p>

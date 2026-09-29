@@ -116,3 +116,18 @@ def test_replace_mode_annotates_category_roots():
     assert out.find(".//nat").get("replace") == "replace"
     # Non-category ancestors (<security>) are NOT annotated — would over-wipe
     assert out.find(".//security").get("replace") is None
+
+
+def test_list_category_keeps_every_sibling_entry():
+    """source_minimal.xml has two <name-server> siblings under <system>.
+
+    Both must survive the graft — collapsing to only the last one is exactly
+    the bug that let drift on an earlier list entry go unreported.
+    """
+    src = _load()
+    builder = DiffBuilder(paths=["/configuration/system/name-server"], prune=[])
+    out = builder.build(src)
+    servers = out.findall(".//system/name-server")
+    assert len(servers) == 2
+    names = {s.findtext("name") for s in servers}
+    assert names == {"8.8.8.8", "1.1.1.1"}

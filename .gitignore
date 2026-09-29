@@ -15,3 +15,6 @@ tests/lab.yaml
 inv.yaml
 .srxsync.env
 *.srxsync.env
+
+# Codex isolated worktrees
+.worktrees/

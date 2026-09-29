@@ -7,8 +7,6 @@ from typing import Literal
 
 from jnpr.junos import Device
 from jnpr.junos.exception import (
-    CommitError,
-    ConfigLoadError,
     ConnectError,
     RpcError,
 )
@@ -43,8 +41,8 @@ class PyEZTransport(Transport):
             self._dev.open()
             self._cfg = Config(self._dev, mode="exclusive")
             self._cfg.lock()
-        except ConnectError as e:
-            raise TransportError(f"connect failed for {host}: {e}") from e
+        except (ConnectError, RpcError) as e:
+            raise TransportError(f"connect failed for {host}: {_reason(e)}") from e
 
     def fetch(self, paths: list[str]) -> etree._Element:
         if self._dev is None:
@@ -56,7 +54,7 @@ class PyEZTransport(Transport):
             try:
                 resp = self._dev.rpc.get_config(filter_xml=filter_xml)
             except RpcError as e:
-                raise TransportError(f"fetch failed at {p}: {e}") from e
+                raise TransportError(f"fetch failed at {p}: {_reason(e)}") from e
             for child in resp:
                 root.append(child)
         return root
@@ -68,24 +66,24 @@ class PyEZTransport(Transport):
             self._cfg.load(
                 etree.tostring(xml).decode(), format="xml", action=mode, ignore_warning=True
             )
-        except ConfigLoadError as e:
-            raise TransportError(f"load failed: {e}") from e
+        except RpcError as e:
+            raise TransportError(f"load failed: {_reason(e)}") from e
 
     def commit_confirmed(self, minutes: int) -> None:
         if self._cfg is None:
             raise TransportError("not connected")
         try:
             self._cfg.commit(confirm=minutes)
-        except CommitError as e:
-            raise TransportError(f"commit confirmed failed: {e}") from e
+        except RpcError as e:
+            raise TransportError(f"commit confirmed failed: {_reason(e)}") from e
 
     def confirm(self) -> None:
         if self._cfg is None:
             raise TransportError("not connected")
         try:
             self._cfg.commit()
-        except CommitError as e:
-            raise TransportError(f"confirm commit failed: {e}") from e
+        except RpcError as e:
+            raise TransportError(f"confirm commit failed: {_reason(e)}") from e
 
     def rollback(self) -> None:
         if self._cfg is None:
@@ -102,6 +100,17 @@ class PyEZTransport(Transport):
             with contextlib.suppress(Exception):
                 self._dev.close()
             self._dev = None
+
+
+def _reason(exc: Exception) -> str:
+    """A short, safe failure reason — never the raw rpc-error text.
+
+    jnpr's RpcError.__str__ embeds the device's bad_element and message,
+    which can echo back fragments of the customer's live configuration
+    (policy/zone/address names). That must not end up in a TargetResult or
+    DriftLine error string, since those are printed straight to stdout.
+    """
+    return exc.__class__.__name__
 
 
 def _build_filter(rel_path: str) -> str:
