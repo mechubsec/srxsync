@@ -17,8 +17,8 @@ Reads selected configuration sections from the master and pushes them to a
 list of target devices, with safety rails (`commit confirmed`), drift
 detection, and per-target include lists.
 
-The rustperformance branch has all this and a rust based communications option.  
-more complex to intall hence the need for both.
+An optional Rust-backed NETCONF transport (`--transport rustez`, Python 3.12+)
+is available alongside the default PyEZ backend; see [Transports](#transports).
 
 ## Install
 
@@ -33,10 +33,10 @@ Optional extras:
 ```
 pip install -e .[keyring]   # OS keyring secret provider
 pip install -e .[vault]     # HashiCorp Vault secret provider
-pip install -e .[rust]      # rustez NETCONF backend (selectable via --transport rustez)
+pip install -e .[rust]      # rustez NETCONF backend (Python 3.12+; --transport rustez)
 ```
 
-Python 3.11+ required.
+Python 3.11+ required (3.12+ for the `[rust]` extra).
 
 ## Quickstart
 
@@ -230,26 +230,24 @@ inventory in `inv.yaml` and prints a markdown table. See
 [`docs/superpowers/specs/2026-04-23-transport-benchmark-design.md`](docs/superpowers/specs/2026-04-23-transport-benchmark-design.md)
 for the exact measurement contract.
 
-## Branches
+## Transports
 
-Two tracks are maintained in parallel:
+`master` is the single branch. It ships two NETCONF backends behind the
+same `Transport` interface, selected with `--transport {pyez,rustez}`:
 
-- **`master`** — pure-Python reference implementation. Transport is
-  [PyEZ](https://github.com/Juniper/py-junos-eznc) (`jnpr.junos`) over
-  NETCONF/SSH. This is the stable, dependency-light branch; install with
-  `pip install -e .[dev]` and go.
-- **`rustperformance`** — hybrid Python/Rust. Adds a second transport
-  backend (`RustezTransport`) built on
-  [rustEZ](https://crates.io/crates/rustez) /
-  [rustnetconf](https://crates.io/crates/rustnetconf), selectable at
-  runtime via `--transport {pyez,rustez}`. The Rust backend ships as an
-  optional extra (`pip install -e .[rust,dev]`) and is validated against
-  PyEZ by a canonical-XML parity test plus a parametrized lab suite.
-  PyEZ remains the default.
+- **`pyez`** (default) — [PyEZ](https://github.com/Juniper/py-junos-eznc)
+  (`jnpr.junos`). Pure Python; `pip install -e .[dev]` and go.
+- **`rustez`** (optional) — built on [rustEZ](https://crates.io/crates/rustez) /
+  [rustnetconf](https://crates.io/crates/rustnetconf). Requires Python ≥ 3.12
+  (rustez ships cp312 wheels only); install with `pip install -e .[rust,dev]`.
+  The extra is capped at `rustez>=0.8.4,<0.9`, the line parity was
+  lab-verified on. Validated against PyEZ by a canonical-XML parity test and
+  the parametrized lab suite.
 
-The two branches are intentionally **not** merged — `master` stays
-Rust-free for deployments that cannot or do not want to pull a Rust
-toolchain, while `rustperformance` is the opt-in performance track.
+**Locking differs between backends.** PyEZ takes an exclusive config lock at
+`connect()`, so `check` and the source fetch lock each device while reading.
+rustez only locks at the first `load()`, so `check` on rustez never locks.
+Tracked in [#8](https://github.com/mechubsec/srxsync/issues/8).
 
 ## License
 
