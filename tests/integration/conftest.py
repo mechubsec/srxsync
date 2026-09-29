@@ -45,3 +45,17 @@ def lab():
         os.environ.setdefault(_env_key("SRX_USER", host), user)
         os.environ.setdefault(_env_key("SRX_SSH_KEY", host), key)
     return data
+
+
+@pytest.fixture(params=["pyez", "rustez"])
+def transport_cls(request):
+    """Parameterized transport class; skips rustez param when extra missing."""
+    name = request.param
+    if name == "rustez":
+        import importlib.util
+
+        if importlib.util.find_spec("rustez") is None:
+            pytest.skip("rustez not installed - run: pip install -e .[rust]")
+    from srxsync.transport import make_transport
+
+    return make_transport(name)

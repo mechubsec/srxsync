@@ -16,11 +16,11 @@ from srxsync.orchestrator import Orchestrator, RunConfig
 from tests.integration.conftest import LAB_FILE
 
 
-@pytest.fixture(scope="module")
-def orch(lab):
+@pytest.fixture
+def orch(lab, transport_cls):
     cats = CategoryModel.default()
     inv = load_inventory(LAB_FILE, known_categories=cats.known_names())
-    return Orchestrator(inv, cats)
+    return Orchestrator(inv, cats, transport_factory=transport_cls)
 
 
 def test_check_runs_and_returns_a_line_per_target(orch, lab):

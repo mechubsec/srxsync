@@ -11,6 +11,7 @@ from srxsync.categories import CategoryModel
 from srxsync.inventory import InventoryError, load_inventory
 from srxsync.orchestrator import Orchestrator, RunConfig
 from srxsync.results import DriftSummary, PushSummary
+from srxsync.transport import KNOWN_TRANSPORTS, make_transport
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -31,11 +32,23 @@ def build_parser() -> argparse.ArgumentParser:
     push.add_argument("--max-parallel", type=int, default=5)
     push.add_argument("--on-error", choices=["continue", "abort"], default="continue")
     push.add_argument("--dry-run", action="store_true")
+    push.add_argument(
+        "--transport",
+        choices=list(KNOWN_TRANSPORTS),
+        default="pyez",
+        help="backend transport (default: pyez)",
+    )
 
     check = sub.add_parser("check", help="detect drift between source and targets")
     check.add_argument("--inventory", required=True, type=Path)
     check.add_argument("--verbose", action="store_true")
     check.add_argument("--max-parallel", type=int, default=5)
+    check.add_argument(
+        "--transport",
+        choices=list(KNOWN_TRANSPORTS),
+        default="pyez",
+        help="backend transport (default: pyez)",
+    )
 
     return parser
 
@@ -51,7 +64,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
 
-    orch = Orchestrator(inventory=inventory, categories=categories)
+    try:
+        transport_cls = make_transport(args.transport)
+    except ImportError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+
+    orch = Orchestrator(inventory=inventory, categories=categories, transport_factory=transport_cls)
 
     if args.command == "push":
         cfg = RunConfig(

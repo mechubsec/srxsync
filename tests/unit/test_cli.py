@@ -1,3 +1,7 @@
+"""Unit tests for CLI argument parsing."""
+
+from __future__ import annotations
+
 import pytest
 
 from srxsync.cli import build_parser
@@ -61,3 +65,35 @@ def test_check_subcommand():
     args = parser.parse_args(["check", "--inventory", "x.yaml", "--verbose"])
     assert args.command == "check"
     assert args.verbose is True
+
+
+def test_push_accepts_transport_flag() -> None:
+    parser = build_parser()
+    args = parser.parse_args(
+        ["push", "--inventory", "inv.yaml", "--merge", "--transport", "rustez"]
+    )
+    assert args.transport == "rustez"
+
+
+def test_check_accepts_transport_flag() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["check", "--inventory", "inv.yaml", "--transport", "rustez"])
+    assert args.transport == "rustez"
+
+
+def test_push_transport_defaults_to_pyez() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["push", "--inventory", "inv.yaml", "--merge"])
+    assert args.transport == "pyez"
+
+
+def test_check_transport_defaults_to_pyez() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["check", "--inventory", "inv.yaml"])
+    assert args.transport == "pyez"
+
+
+def test_transport_rejects_unknown_value() -> None:
+    parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["push", "--inventory", "inv.yaml", "--merge", "--transport", "grpc"])

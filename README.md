@@ -17,8 +17,8 @@ Reads selected configuration sections from the master and pushes them to a
 list of target devices, with safety rails (`commit confirmed`), drift
 detection, and per-target include lists.
 
-The rustperformance branch has all this and a rust based communications option.  
-more complex to intall hence the need for both.
+An optional Rust-backed NETCONF transport (`--transport rustez`, Python 3.12
+only) is available alongside the default PyEZ backend; see [Transports](#transports).
 
 ## Install
 
@@ -33,9 +33,11 @@ Optional extras:
 ```
 pip install -e .[keyring]   # OS keyring secret provider
 pip install -e .[vault]     # HashiCorp Vault secret provider
+pip install -e .[rust]      # rustez NETCONF backend (Python 3.12 only; --transport rustez)
 ```
 
-Python 3.11+ required.
+Python 3.11+ required (Python 3.12 exactly for the `[rust]` extra — rustez
+ships cp312 wheels only).
 
 ## Quickstart
 
@@ -85,8 +87,9 @@ Python 3.11+ required.
 srxsync push  --inventory inv.yaml (--replace | --merge)
               [--commit-confirmed N] [--max-parallel N]
               [--on-error continue|abort] [--dry-run]
+              [--transport {pyez,rustez}]
 
-srxsync check --inventory inv.yaml [--verbose]
+srxsync check --inventory inv.yaml [--verbose] [--transport {pyez,rustez}]
 ```
 
 | Flag | Meaning |
@@ -97,6 +100,7 @@ srxsync check --inventory inv.yaml [--verbose]
 | `--on-error continue\|abort` | On a per-target failure, continue (exit non-zero at end) or cancel remaining work. Default: continue. |
 | `--dry-run` | Fetch source + compute per-target payload, print what would change, do not load or commit. |
 | `--verbose` (check only) | Show per-category XML diff for drifted targets. |
+| `--transport {pyez,rustez}` | NETCONF backend. `pyez` (default) is junos-eznc; `rustez` is the Rust-backed client (install with `pip install -e .[rust]`). Both produce identical results; `rustez` is faster for large fleets. |
 
 Exit 0 only when every target succeeded (push) or is in sync (check).
 
@@ -181,9 +185,11 @@ export SRXSYNC_LAB_SSH_KEY=~/.ssh/id_ed25519
 ```
 
 The lab tests exercise the full pipeline — drift detection, merge sync,
-`--replace` wipe, and commit-confirmed auto-rollback. The last test waits
-75 seconds for the Junos rollback timer, so expect ~100s for a full
-integration run.
+`--replace` wipe, and commit-confirmed auto-rollback. Every test is
+parametrized over both transports (`pyez` and `rustez`) when the `[rust]`
+extra is installed; rustez cases are skipped cleanly otherwise. The
+commit-confirmed test waits 75 seconds for the Junos rollback timer, so
+expect ~3–4 minutes for a full integration run across both backends.
 
 ## Architecture
 
@@ -199,34 +205,53 @@ CLI → Orchestrator → (CategoryModel, DiffBuilder, DriftDetector, Transport)
   rules, annotates replace-mode category roots.
 - **DriftDetector** (`drift.py`) — canonical XML compare of source vs
   target within the synced scope.
-- **Transport** (`transport/base.py`) — abstract; v1 implementation is
-  `PyEZTransport` (`transport/pyez.py`). A Rust backend (`rustEZ` /
-  `rustnetconf`) is a phase-2 drop-in.
+- **Transport** (`transport/base.py`) — abstract; two concrete backends
+  selected at runtime via `--transport`:
+  - `PyEZTransport` (`transport/pyez.py`) — junos-eznc, default.
+  - `RustezTransport` (`transport/rustez.py`) — Rust-backed via
+    [rustez](https://github.com/fastrevmd-lab/rustEZ) + rustnetconf,
+    gated by the `[rust]` extra. Integration tests parametrize both
+    backends so parity is enforced.
 - **Orchestrator** (`orchestrator.py`) — async semaphore-capped fanout,
   per-target category resolution and lifecycle (`connect → load → commit
   confirmed → confirm → close`), `--on-error` handling, aggregate exit code.
   Master is fetched once with the union of all target includes.
 
-## Branches
+## Benchmarking
 
-Two tracks are maintained in parallel:
+A lightweight wall-time comparator lives at
+[`tests/bench/bench_transports.py`](tests/bench/bench_transports.py):
 
-- **`master`** — pure-Python reference implementation. Transport is
-  [PyEZ](https://github.com/Juniper/py-junos-eznc) (`jnpr.junos`) over
-  NETCONF/SSH. This is the stable, dependency-light branch; install with
-  `pip install -e .[dev]` and go.
-- **`rustperformance`** — hybrid Python/Rust. Adds a second transport
-  backend (`RustezTransport`) built on
-  [rustEZ](https://crates.io/crates/rustez) /
-  [rustnetconf](https://crates.io/crates/rustnetconf), selectable at
-  runtime via `--transport {pyez,rustez}`. The Rust backend ships as an
-  optional extra (`pip install -e .[rust,dev]`) and is validated against
-  PyEZ by a canonical-XML parity test plus a parametrized lab suite.
-  PyEZ remains the default.
+    source .venv/bin/activate
+    source ~/.srxsync.env
+    python tests/bench/bench_transports.py
 
-The two branches are intentionally **not** merged — `master` stays
-Rust-free for deployments that cannot or do not want to pull a Rust
-toolchain, while `rustperformance` is the opt-in performance track.
+It measures 20 fetches and 3 merge-pushes per backend against the
+inventory in `inv.yaml` and prints a markdown table. See
+[`docs/superpowers/specs/2026-04-23-transport-benchmark-design.md`](docs/superpowers/specs/2026-04-23-transport-benchmark-design.md)
+for the exact measurement contract.
+
+## Transports
+
+`master` is the single branch. It ships two NETCONF backends behind the
+same `Transport` interface, selected with `--transport {pyez,rustez}`:
+
+- **`pyez`** (default) — [PyEZ](https://github.com/Juniper/py-junos-eznc)
+  (`jnpr.junos`). Pure Python; `pip install -e .[dev]` and go.
+- **`rustez`** (optional) — built on [rustEZ](https://crates.io/crates/rustez) /
+  [rustnetconf](https://crates.io/crates/rustnetconf). Requires Python 3.12
+  exactly (rustez ships cp312 wheels only; the `[rust]` extra's marker is
+  `python_version == "3.12"`, not `>=`, so it stays a no-op resolver skip on
+  newer interpreters instead of a failed source build); install with
+  `pip install -e .[rust,dev]`.
+  The extra is capped at `rustez>=0.8.4,<0.9`, the line parity was
+  lab-verified on. Validated against PyEZ by a canonical-XML parity test and
+  the parametrized lab suite.
+
+**Locking differs between backends.** PyEZ takes an exclusive config lock at
+`connect()`, so `check` and the source fetch lock each device while reading.
+rustez only locks at the first `load()`, so `check` on rustez never locks.
+Tracked in [#8](https://github.com/mechubsec/srxsync/issues/8).
 
 ## License
 

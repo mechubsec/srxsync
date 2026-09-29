@@ -20,7 +20,7 @@ class Transport(ABC):
         username: str,
         password: str | None = None,
         ssh_key: str | None = None,
-        port: int = 22,
+        port: int = 830,
     ) -> None: ...
 
     @abstractmethod

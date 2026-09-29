@@ -16,7 +16,6 @@ from lxml import etree
 
 from srxsync.categories import CategoryModel
 from srxsync.inventory import load_inventory
-from srxsync.transport import PyEZTransport
 from tests.integration.conftest import LAB_FILE
 
 MARKER = "srxsync-rollback-marker"
@@ -32,7 +31,7 @@ def _slave_has_policy(host, user, key, name):
 
 
 @pytest.mark.slow
-def test_commit_confirmed_auto_rollback(lab):
+def test_commit_confirmed_auto_rollback(lab, transport_cls):
     cats = CategoryModel.default()
     inv = load_inventory(LAB_FILE, known_categories=cats.known_names())
     slave1 = inv.targets[0].host
@@ -63,7 +62,7 @@ def test_commit_confirmed_auto_rollback(lab):
       </configuration>
     """)
 
-    t = PyEZTransport()
+    t = transport_cls()
     try:
         t.connect(slave1, user, None, ssh_key=key)
         t.load(payload, mode="merge")

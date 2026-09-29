@@ -68,13 +68,14 @@ def _slave_has_policy(host, user, key, name):
     return name in etree.tostring(resp).decode()
 
 
-@pytest.fixture(scope="module")
-def lab_ctx(lab):
+@pytest.fixture
+def lab_ctx(lab, transport_cls):
     cats = CategoryModel.default()
     inv = load_inventory(LAB_FILE, known_categories=cats.known_names())
-    orch = Orchestrator(inv, cats)
+    orch = Orchestrator(inv, cats, transport_factory=transport_cls)
     import os
     from pathlib import Path
+
     user = os.environ.get("SRXSYNC_LAB_USER", "srxsync")
     key = os.environ.get(
         "SRXSYNC_LAB_SSH_KEY", str(Path.home() / ".ssh" / "id_ed25519")
