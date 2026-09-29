@@ -12,6 +12,12 @@ def test_secret_dataclass():
     assert s.password == "hunter2"
 
 
+def test_secret_repr_does_not_leak_password():
+    s = Secret(username="admin", password="hunter2")
+    assert "hunter2" not in repr(s)
+    assert "admin" in repr(s)
+
+
 def test_env_provider_reads_env(monkeypatch):
     monkeypatch.setenv("SRX_USER_SRX_A_EXAMPLE_NET", "admin")
     monkeypatch.setenv("SRX_PASSWORD_SRX_A_EXAMPLE_NET", "pw")

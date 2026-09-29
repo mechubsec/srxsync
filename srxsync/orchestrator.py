@@ -16,7 +16,7 @@ from srxsync.drift import DriftDetector, DriftReport
 from srxsync.inventory import Inventory, Target
 from srxsync.results import DriftLine, DriftSummary, PushSummary, TargetResult
 from srxsync.secrets import get_secret
-from srxsync.transport import PyEZTransport, Transport, TransportError
+from srxsync.transport import PyEZTransport, Transport
 
 
 @dataclass(frozen=True)
@@ -61,8 +61,12 @@ class Orchestrator:
                     self._push_target, target, source_xml, cfg, abort_event
                 )
 
-        results = await asyncio.gather(*(run_one(t) for t in self._inv.targets))
-        return PushSummary(results=list(results))
+        raw = await asyncio.gather(*(run_one(t) for t in self._inv.targets), return_exceptions=True)
+        results = [
+            r if isinstance(r, TargetResult) else TargetResult(host=t.host, ok=False, error=str(r))
+            for t, r in zip(self._inv.targets, raw, strict=True)
+        ]
+        return PushSummary(results=results)
 
     async def check(self, max_parallel: int) -> DriftSummary:
         source_xml = self._fetch_source()
@@ -72,8 +76,14 @@ class Orchestrator:
             async with sem:
                 return await asyncio.to_thread(self._check_target, target, source_xml)
 
-        lines = await asyncio.gather(*(check_one(t) for t in self._inv.targets))
-        return DriftSummary(reports=list(lines))
+        raw = await asyncio.gather(
+            *(check_one(t) for t in self._inv.targets), return_exceptions=True
+        )
+        lines = [
+            r if isinstance(r, DriftLine) else DriftLine(host=t.host, in_sync=False, error=str(r))
+            for t, r in zip(self._inv.targets, raw, strict=True)
+        ]
+        return DriftSummary(reports=lines)
 
     # --- internals ---
 
@@ -118,7 +128,10 @@ class Orchestrator:
                 ok=True,
                 duration_s=time.monotonic() - start,
             )
-        except TransportError as e:
+        except Exception as e:
+            # Deliberately broad: lock, timeout, and secret/Vault failures are
+            # not TransportError, but a failure on one target must still roll
+            # back that target and report it rather than abort the fleet.
             with contextlib.suppress(Exception):
                 t.rollback()
             if cfg.on_error == "abort":
@@ -147,7 +160,9 @@ class Orchestrator:
                 in_sync=rep.in_sync,
                 differing_paths=list(rep.differing_paths),
             )
-        except TransportError as e:
+        except Exception as e:
+            # See _push_target: lock, timeout, and secret/Vault failures are
+            # not TransportError but must still produce a per-target report.
             return DriftLine(host=target.host, in_sync=False, error=str(e))
         finally:
             with contextlib.suppress(Exception):
