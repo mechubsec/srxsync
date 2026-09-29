@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please report suspected security issues privately using [GitHub Security
-Advisories](https://github.com/fastrevmd-lab/srxsync/security/advisories/new)
+Advisories](https://github.com/mechubsec/srxsync/security/advisories/new)
 for this repository. Do not open a public issue for anything that could be
 exploited before a fix ships.
 

@@ -13,8 +13,9 @@ labels: bug
 
 ## Steps to reproduce
 
-<!-- Command line, inventory shape (redact real hostnames/credentials),
-     and any relevant output. -->
+<!-- Command line, inventory shape, and any relevant output. Redact real
+     hostnames, serials, IPs, credentials, config snippets, and pre-shared
+     keys/community strings. -->
 
 ## Environment
 

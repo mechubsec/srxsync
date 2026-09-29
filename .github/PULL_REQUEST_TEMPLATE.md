@@ -21,4 +21,5 @@
 - [ ] `mypy srxsync` passes
 - [ ] `pytest tests/unit` passes
 - [ ] Any new/changed test fixtures use synthetic data (no real device
-      hostnames, serials, or credentials)
+      hostnames, serials, IPs, credentials, config snippets, or pre-shared
+      keys/community strings)

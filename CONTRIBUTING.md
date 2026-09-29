@@ -23,11 +23,14 @@ mypy srxsync
 pytest tests/unit
 ```
 
-`tests/integration/` exercises a real vSRX lab and is skipped automatically
-unless a `tests/lab.yaml` is present locally (see `tests/lab.yaml.example`).
-CI never runs it — there is no lab reachable from a GitHub Actions runner.
-Don't add tests there expecting CI coverage; put the behavior under test in
-`tests/unit` against fixtures instead.
+`tests/integration/` runs against the devices in your local `tests/lab.yaml`
+whenever that file is present — plain `pytest` will hit the lab. Use
+`pytest tests/unit` unless you intend to touch lab hardware. Never wire
+integration tests into CI, a cron, or anything a model can trigger without a
+human in the loop. CI never runs `tests/integration/` — there is no lab
+reachable from a GitHub Actions runner. Don't add tests there expecting CI
+coverage; put the behavior under test in `tests/unit` against fixtures
+instead.
 
 ## The device-mutating path gets extra scrutiny
 
@@ -45,9 +48,10 @@ flags needs to hold to a few non-negotiable rules:
   target half-configured. See the existing behavior in
   `srxsync/orchestrator.py` before changing this.
 - **Nothing runs unattended against real hardware.** `tests/integration/`
-  requires an explicit `--run-integration` flag and a local `tests/lab.yaml`
-  — never wire it into a default CI job, a cron, or anything a model can
-  trigger without a human in the loop.
+  runs against the devices in your local `tests/lab.yaml` whenever that file
+  is present — plain `pytest` will hit the lab. Never wire it into a default
+  CI job, a cron, or anything a model can trigger without a human in the
+  loop.
 - **`--dry-run` must stay a true dry run.** If you touch the dry-run path,
   verify by hand that it still performs zero `load`/`commit` calls.
 

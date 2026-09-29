@@ -7,7 +7,7 @@ from srxsync.secrets.base import Secret, SecretError, SecretProvider
 
 _keyring: ModuleType | None
 try:
-    import keyring as _keyring
+    import keyring as _keyring  # type: ignore[no-redef]
 except ImportError:
     _keyring = None
 
