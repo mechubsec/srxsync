@@ -7,8 +7,6 @@ from typing import Literal
 
 from jnpr.junos import Device
 from jnpr.junos.exception import (
-    CommitError,
-    ConfigLoadError,
     ConnectError,
     RpcError,
 )
@@ -43,7 +41,7 @@ class PyEZTransport(Transport):
             self._dev.open()
             self._cfg = Config(self._dev, mode="exclusive")
             self._cfg.lock()
-        except ConnectError as e:
+        except (ConnectError, RpcError) as e:
             raise TransportError(f"connect failed for {host}: {_reason(e)}") from e
 
     def fetch(self, paths: list[str]) -> etree._Element:
@@ -68,7 +66,7 @@ class PyEZTransport(Transport):
             self._cfg.load(
                 etree.tostring(xml).decode(), format="xml", action=mode, ignore_warning=True
             )
-        except ConfigLoadError as e:
+        except RpcError as e:
             raise TransportError(f"load failed: {_reason(e)}") from e
 
     def commit_confirmed(self, minutes: int) -> None:
@@ -76,7 +74,7 @@ class PyEZTransport(Transport):
             raise TransportError("not connected")
         try:
             self._cfg.commit(confirm=minutes)
-        except CommitError as e:
+        except RpcError as e:
             raise TransportError(f"commit confirmed failed: {_reason(e)}") from e
 
     def confirm(self) -> None:
@@ -84,7 +82,7 @@ class PyEZTransport(Transport):
             raise TransportError("not connected")
         try:
             self._cfg.commit()
-        except CommitError as e:
+        except RpcError as e:
             raise TransportError(f"confirm commit failed: {_reason(e)}") from e
 
     def rollback(self) -> None:

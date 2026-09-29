@@ -16,10 +16,13 @@ _LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 def _require_secure_addr(addr: str) -> None:
     parsed = urlparse(addr)
-    if parsed.scheme == "http" and parsed.hostname not in _LOOPBACK_HOSTS:
+    allowed = parsed.scheme == "https" or (
+        parsed.scheme == "http" and parsed.hostname in _LOOPBACK_HOSTS
+    )
+    if not allowed:
         raise SecretError(
-            f"refusing plaintext VAULT_ADDR {addr!r}: http:// is only allowed "
-            "to a loopback host — use https://"
+            f"refusing VAULT_ADDR {addr!r}: only https:// is allowed, or "
+            "http:// to a loopback host — use https://"
         )
 
 

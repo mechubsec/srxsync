@@ -53,6 +53,29 @@ def test_drift_in_non_last_list_entry_is_detected():
     assert "/configuration/system/name-server" in rep.differing_paths
 
 
+def test_reordered_list_entries_are_reported_as_drift():
+    """Same two <name-server> entries, swapped order. Junos keeps list
+    categories in configured order, and that order is meaningful (e.g. the
+    resolver order), so a reorder is real drift — it must not be masked by
+    comparing the two lists as sorted, order-independent sets."""
+    src = etree.fromstring(
+        "<configuration><system>"
+        "<name-server><name>192.0.2.1</name></name-server>"
+        "<name-server><name>192.0.2.2</name></name-server>"
+        "</system></configuration>"
+    )
+    tgt = etree.fromstring(
+        "<configuration><system>"
+        "<name-server><name>192.0.2.2</name></name-server>"
+        "<name-server><name>192.0.2.1</name></name-server>"
+        "</system></configuration>"
+    )
+    det = DriftDetector(paths=["/configuration/system/name-server"], prune=[])
+    rep = det.diff(src, tgt)
+    assert rep.in_sync is False
+    assert "/configuration/system/name-server" in rep.differing_paths
+
+
 def test_detects_system_category_drift_granularity():
     """Drift is reported per-category: ntp/time-zone/name-server drift but syslog
     and domain-name do not, proving category-level granularity."""

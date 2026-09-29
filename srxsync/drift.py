@@ -33,11 +33,13 @@ class DriftDetector:
         for abs_path in self.paths:
             rel = abs_path.removeprefix("/configuration/")
             # A path can match several sibling list entries (e.g. multiple
-            # <name-server> elements). Compare the full, order-independent
-            # set — .find() would only ever look at one element and miss
-            # drift in any entry that isn't it.
-            src_nodes = sorted(_canonicalize(n) for n in src_scoped.findall(rel))
-            tgt_nodes = sorted(_canonicalize(n) for n in tgt_scoped.findall(rel))
+            # <name-server> elements). Compare the full list in document
+            # order — .find() would only ever look at one element and miss
+            # drift in any entry that isn't it. Order matters for Junos list
+            # categories (e.g. name-server resolution order), so this must
+            # not be sorted: a reordered-but-identical-set list is drift.
+            src_nodes = [_canonicalize(n) for n in src_scoped.findall(rel)]
+            tgt_nodes = [_canonicalize(n) for n in tgt_scoped.findall(rel)]
             if src_nodes != tgt_nodes:
                 differing.append(abs_path)
         return DriftReport(host=host, differing_paths=differing)
