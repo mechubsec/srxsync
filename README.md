@@ -17,8 +17,8 @@ Reads selected configuration sections from the master and pushes them to a
 list of target devices, with safety rails (`commit confirmed`), drift
 detection, and per-target include lists.
 
-An optional Rust-backed NETCONF transport (`--transport rustez`, Python 3.12+)
-is available alongside the default PyEZ backend; see [Transports](#transports).
+An optional Rust-backed NETCONF transport (`--transport rustez`, Python 3.12
+only) is available alongside the default PyEZ backend; see [Transports](#transports).
 
 ## Install
 
@@ -33,10 +33,11 @@ Optional extras:
 ```
 pip install -e .[keyring]   # OS keyring secret provider
 pip install -e .[vault]     # HashiCorp Vault secret provider
-pip install -e .[rust]      # rustez NETCONF backend (Python 3.12+; --transport rustez)
+pip install -e .[rust]      # rustez NETCONF backend (Python 3.12 only; --transport rustez)
 ```
 
-Python 3.11+ required (3.12+ for the `[rust]` extra).
+Python 3.11+ required (Python 3.12 exactly for the `[rust]` extra — rustez
+ships cp312 wheels only).
 
 ## Quickstart
 
@@ -238,8 +239,11 @@ same `Transport` interface, selected with `--transport {pyez,rustez}`:
 - **`pyez`** (default) — [PyEZ](https://github.com/Juniper/py-junos-eznc)
   (`jnpr.junos`). Pure Python; `pip install -e .[dev]` and go.
 - **`rustez`** (optional) — built on [rustEZ](https://crates.io/crates/rustez) /
-  [rustnetconf](https://crates.io/crates/rustnetconf). Requires Python ≥ 3.12
-  (rustez ships cp312 wheels only); install with `pip install -e .[rust,dev]`.
+  [rustnetconf](https://crates.io/crates/rustnetconf). Requires Python 3.12
+  exactly (rustez ships cp312 wheels only; the `[rust]` extra's marker is
+  `python_version == "3.12"`, not `>=`, so it stays a no-op resolver skip on
+  newer interpreters instead of a failed source build); install with
+  `pip install -e .[rust,dev]`.
   The extra is capped at `rustez>=0.8.4,<0.9`, the line parity was
   lab-verified on. Validated against PyEZ by a canonical-XML parity test and
   the parametrized lab suite.
