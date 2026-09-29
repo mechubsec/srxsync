@@ -6,7 +6,8 @@ install hint if rustez is unavailable. Do not import this module from
 anywhere else.
 
 Every rustez exception is wrapped as TransportError so the orchestrator
-sees a single exception type regardless of backend. Best-effort cleanup
+sees a single exception type regardless of backend; only the exception
+type name is kept, never the device's error text. Best-effort cleanup
 in close() mirrors PyEZTransport.
 """
 
@@ -17,23 +18,14 @@ from typing import Literal
 
 from lxml import etree
 from rustez import Config, Device
-from rustez.exceptions import (
-    ConfigLoadError,
-    ConnectAuthError,
-    ConnectError,
-    ConnectTimeoutError,
-    RpcError,
-)
+from rustez.exceptions import RustEzError
 
 from srxsync.transport.base import Transport, TransportError
 
-_RUSTEZ_ERRORS: tuple[type[Exception], ...] = (
-    ConnectError,
-    ConnectAuthError,
-    ConnectTimeoutError,
-    ConfigLoadError,
-    RpcError,
-)
+# Catch the rustez base class, not an enumerated subset: RpcTimeoutError,
+# SessionExpiredError, ChannelClosedError etc. must also be wrapped, or they
+# escape to the orchestrator's broad per-target handler, which prints str(e).
+_RUSTEZ_ERRORS: tuple[type[Exception], ...] = (RustEzError,)
 
 
 class RustezTransport(Transport):
@@ -66,7 +58,7 @@ class RustezTransport(Transport):
             )
             self._dev.open(gather_facts=False)
         except _RUSTEZ_ERRORS as exc:
-            raise TransportError(f"connect failed for {host}: {exc}") from exc
+            raise TransportError(f"connect failed for {host}: {_reason(exc)}") from exc
 
     def close(self) -> None:
         if self._cfg is not None and self._locked:
@@ -90,7 +82,7 @@ class RustezTransport(Transport):
         try:
             reply = self._dev.rpc.get_config(filter_xml=filter_xml)
         except _RUSTEZ_ERRORS as exc:
-            raise TransportError(f"fetch failed on {self._host}: {exc}") from exc
+            raise TransportError(f"fetch failed on {self._host}: {_reason(exc)}") from exc
         cfg = reply.find(".//configuration")
         if cfg is None and reply.tag == "configuration":
             cfg = reply
@@ -111,12 +103,12 @@ class RustezTransport(Transport):
             try:
                 self._cfg.lock()
             except _RUSTEZ_ERRORS as exc:
-                raise TransportError(f"lock failed on {self._host}: {exc}") from exc
+                raise TransportError(f"lock failed on {self._host}: {_reason(exc)}") from exc
             self._locked = True
         try:
             self._cfg.load(etree.tostring(xml).decode(), format="xml", action=mode)
         except _RUSTEZ_ERRORS as exc:
-            raise TransportError(f"load failed on {self._host}: {exc}") from exc
+            raise TransportError(f"load failed on {self._host}: {_reason(exc)}") from exc
 
     def commit_confirmed(self, minutes: int) -> None:
         if self._cfg is None:
@@ -124,7 +116,9 @@ class RustezTransport(Transport):
         try:
             self._cfg.commit(confirm=minutes)
         except _RUSTEZ_ERRORS as exc:
-            raise TransportError(f"commit confirmed failed on {self._host}: {exc}") from exc
+            raise TransportError(
+                f"commit confirmed failed on {self._host}: {_reason(exc)}"
+            ) from exc
 
     def confirm(self) -> None:
         if self._cfg is None:
@@ -132,13 +126,23 @@ class RustezTransport(Transport):
         try:
             self._cfg.commit()
         except _RUSTEZ_ERRORS as exc:
-            raise TransportError(f"confirm commit failed on {self._host}: {exc}") from exc
+            raise TransportError(f"confirm commit failed on {self._host}: {_reason(exc)}") from exc
 
     def rollback(self) -> None:
         if self._cfg is None:
             return  # nothing to roll back; match PyEZ behavior
         with contextlib.suppress(Exception):
             self._cfg.rollback(0)
+
+
+def _reason(exc: Exception) -> str:
+    """A short, safe failure reason -- never the raw rpc-error text.
+
+    Mirrors PyEZTransport._reason: device error text can echo fragments of
+    live configuration or lock-holder identity, and TargetResult/DriftLine
+    error strings are printed straight to stdout.
+    """
+    return exc.__class__.__name__
 
 
 def _paths_to_filter(paths: list[str]) -> str:
