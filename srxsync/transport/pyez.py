@@ -20,6 +20,7 @@ class PyEZTransport(Transport):
     def __init__(self) -> None:
         self._dev: Device | None = None
         self._cfg: Config | None = None
+        self._locked: bool = False
 
     def connect(
         self,
@@ -41,6 +42,7 @@ class PyEZTransport(Transport):
             self._dev.open()
             self._cfg = Config(self._dev, mode="exclusive")
             self._cfg.lock()
+            self._locked = True
         except (ConnectError, RpcError) as e:
             raise TransportError(f"connect failed for {host}: {_reason(e)}") from e
 
@@ -86,16 +88,17 @@ class PyEZTransport(Transport):
             raise TransportError(f"confirm commit failed: {_reason(e)}") from e
 
     def rollback(self) -> None:
-        if self._cfg is None:
+        if self._cfg is None or not self._locked:
             return
         with contextlib.suppress(RpcError):
             self._cfg.rollback()
 
     def close(self) -> None:
-        if self._cfg is not None:
+        if self._cfg is not None and self._locked:
             with contextlib.suppress(RpcError):
                 self._cfg.unlock()
-            self._cfg = None
+            self._locked = False
+        self._cfg = None
         if self._dev is not None:
             with contextlib.suppress(Exception):
                 self._dev.close()

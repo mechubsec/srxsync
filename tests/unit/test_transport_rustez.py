@@ -155,3 +155,38 @@ def test_load_and_fetch_errors_are_sanitized(rustez_module: types.ModuleType) ->
     with pytest.raises(TransportError) as info:
         tx.load(etree.Element("configuration"), "merge")
     assert SECRET_TEXT not in str(info.value)
+
+
+def test_rollback_and_close_are_noops_after_failed_lock(
+    rustez_module: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """If Config.lock() raises during connect(), we never held the lock.
+    rollback() must not send <rollback>, and close() must not send <unlock>,
+    for a candidate another session may still be editing — otherwise a
+    failed lock (e.g. because another operator already has uncommitted
+    changes) turns into us discarding their work."""
+    calls: list[str] = []
+
+    fake_dev = types.SimpleNamespace(
+        open=lambda **kw: calls.append("open"),
+        close=lambda: calls.append("close"),
+    )
+    monkeypatch.setattr(rustez_module, "Device", lambda **kw: fake_dev)
+
+    fake_cfg = types.SimpleNamespace(
+        lock=_raise(_RpcError("locked by another session")),
+        rollback=lambda amount: calls.append(f"rollback({amount})"),
+        unlock=lambda: calls.append("unlock"),
+    )
+    monkeypatch.setattr(rustez_module, "Config", lambda dev: fake_cfg)
+
+    tx = rustez_module.RustezTransport()
+    with pytest.raises(TransportError):
+        tx.connect("192.0.2.1", "u", "p")
+
+    tx.rollback()
+    tx.close()
+
+    assert "rollback(0)" not in calls
+    assert "unlock" not in calls
+    assert tx._locked is False
