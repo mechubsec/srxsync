@@ -45,6 +45,28 @@ def test_reason_never_echoes_device_rpc_error_body():
     assert reason == "RpcError"
 
 
+def test_connect_locks_before_any_read(monkeypatch):
+    """The candidate lock must be held for the whole session, including a
+    read-only `check` (connect + fetch, no load). If connect() returned
+    before locking, a concurrent session could mutate the candidate between
+    our connect() and our first read, and we'd never know."""
+    calls: list[str] = []
+
+    fake_device = MagicMock()
+    fake_device.open.side_effect = lambda: calls.append("open")
+    monkeypatch.setattr("srxsync.transport.pyez.Device", lambda **kw: fake_device)
+
+    fake_config = MagicMock()
+    fake_config.lock.side_effect = lambda: calls.append("lock")
+    monkeypatch.setattr("srxsync.transport.pyez.Config", lambda dev, mode: fake_config)
+
+    t = PyEZTransport()
+    t.connect("198.51.100.1", "svc", password="FAKEPASS")
+
+    assert calls == ["open", "lock"]
+    fake_config.lock.assert_called_once()
+
+
 def test_connect_never_echoes_device_lock_error_body(monkeypatch):
     """A LockError raised by Config.lock() during connect() is an RpcError,
     not a ConnectError. Before this fix, connect() only wrapped ConnectError,

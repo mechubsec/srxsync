@@ -248,10 +248,12 @@ same `Transport` interface, selected with `--transport {pyez,rustez}`:
   lab-verified on. Validated against PyEZ by a canonical-XML parity test and
   the parametrized lab suite.
 
-**Locking differs between backends.** PyEZ takes an exclusive config lock at
-`connect()`, so `check` and the source fetch lock each device while reading.
-rustez only locks at the first `load()`, so `check` on rustez never locks.
-Tracked in [#8](https://github.com/mechubsec/srxsync/issues/8).
+**Locking is aligned across backends.** Both PyEZ and rustez take an
+exclusive config lock at `connect()` and hold it until `close()`, so `check`
+and the source fetch lock each device while reading, on either backend. This
+closes the window rustez previously left open between `connect()` and the
+first `load()`, where another session could mutate the candidate
+config underneath an in-flight push. See [#8](https://github.com/mechubsec/srxsync/issues/8).
 
 ## License
 

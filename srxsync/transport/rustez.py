@@ -57,6 +57,9 @@ class RustezTransport(Transport):
                 ssh_private_key_file=ssh_key,
             )
             self._dev.open(gather_facts=False)
+            self._cfg = Config(self._dev)
+            self._cfg.lock()
+            self._locked = True
         except _RUSTEZ_ERRORS as exc:
             raise TransportError(f"connect failed for {host}: {_reason(exc)}") from exc
 
@@ -95,16 +98,8 @@ class RustezTransport(Transport):
     # ------------------------------------------------------------------
 
     def load(self, xml: etree._Element, mode: Literal["replace", "merge"]) -> None:
-        if self._dev is None:
+        if self._dev is None or self._cfg is None:
             raise TransportError("not connected")
-        if self._cfg is None:
-            self._cfg = Config(self._dev)
-        if not self._locked:
-            try:
-                self._cfg.lock()
-            except _RUSTEZ_ERRORS as exc:
-                raise TransportError(f"lock failed on {self._host}: {_reason(exc)}") from exc
-            self._locked = True
         try:
             self._cfg.load(etree.tostring(xml).decode(), format="xml", action=mode)
         except _RUSTEZ_ERRORS as exc:

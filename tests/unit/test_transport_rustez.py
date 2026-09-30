@@ -100,6 +100,48 @@ def test_unlisted_subclass_during_commit_is_wrapped(rustez_module: types.ModuleT
     assert SECRET_TEXT not in str(info.value)
 
 
+def test_connect_locks_immediately_like_pyez(
+    rustez_module: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """rustez used to defer the candidate lock to the first load(), leaving
+    a window after connect() (e.g. during a read-only `check`) where another
+    session could mutate the candidate underneath us. The lock must now be
+    taken in connect(), same as PyEZTransport, so `check` and the push path
+    lock at the same point on both backends."""
+    calls: list[str] = []
+
+    fake_dev = types.SimpleNamespace(open=lambda **kw: calls.append("open"))
+    monkeypatch.setattr(rustez_module, "Device", lambda **kw: fake_dev)
+
+    fake_cfg = types.SimpleNamespace(lock=lambda: calls.append("lock"))
+    monkeypatch.setattr(rustez_module, "Config", lambda dev: fake_cfg)
+
+    tx = rustez_module.RustezTransport()
+    tx.connect("192.0.2.1", "u", "p")
+
+    assert calls == ["open", "lock"]
+    assert tx._locked is True
+    assert tx._cfg is fake_cfg
+
+
+def test_load_does_not_relock(rustez_module: types.ModuleType) -> None:
+    """load() must use the lock already taken in connect() rather than
+    locking again — locking is not idempotent on the wire, so a second
+    lock() call from an already-locked session would fail against a real
+    device."""
+    tx = rustez_module.RustezTransport()
+    calls: list[str] = []
+    tx._dev = types.SimpleNamespace()
+    tx._cfg = types.SimpleNamespace(
+        lock=lambda: calls.append("lock"), load=lambda *a, **kw: calls.append("load")
+    )
+    tx._locked = True
+
+    tx.load(etree.Element("configuration"), "merge")
+
+    assert calls == ["load"]
+
+
 def test_load_and_fetch_errors_are_sanitized(rustez_module: types.ModuleType) -> None:
     tx = rustez_module.RustezTransport()
     tx._dev = types.SimpleNamespace(
