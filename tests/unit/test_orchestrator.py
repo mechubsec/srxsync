@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from typing import ClassVar, Literal
 
 from lxml import etree
@@ -162,6 +163,25 @@ def test_check_mixed_failures_report_every_target(monkeypatch):
     assert by_host[HOST_VAULT].error is not None
     assert by_host[HOST_OK].error is None
     assert by_host[HOST_OK].in_sync is True
+
+
+HOST_SOURCE = "198.51.100.1"
+
+
+def test_fetch_source_closes_session_when_lock_fails(monkeypatch):
+    """connect() on the source device was called outside _fetch_source's
+    try/finally. If lock() raised there, close() never ran and the NETCONF
+    session to the source stayed open until GC or process exit."""
+    _FakeTransport.reset(connect_failures={HOST_SOURCE: _LockError("lock held")})
+    _patch_get_secret(monkeypatch, secret_failures=set())
+
+    inv = _inventory([HOST_OK])
+    orch = Orchestrator(inventory=inv, categories=_categories(), transport_factory=_FakeTransport)
+
+    with contextlib.suppress(_LockError):
+        orch._fetch_source()
+
+    assert HOST_SOURCE in _FakeTransport.closes
 
 
 def test_gather_return_exceptions_defends_against_an_escaped_error(monkeypatch):

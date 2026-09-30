@@ -124,7 +124,7 @@ class RustezTransport(Transport):
             raise TransportError(f"confirm commit failed on {self._host}: {_reason(exc)}") from exc
 
     def rollback(self) -> None:
-        if self._cfg is None:
+        if self._cfg is None or not self._locked:
             return  # nothing to roll back; match PyEZ behavior
         with contextlib.suppress(Exception):
             self._cfg.rollback(0)

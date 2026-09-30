@@ -93,3 +93,30 @@ def test_connect_never_echoes_device_lock_error_body(monkeypatch):
     assert "alice" not in message
     assert "198.51.100.7" not in message
     assert "LockError" in message
+
+
+def test_rollback_and_close_are_noops_after_failed_lock(monkeypatch):
+    """If Config.lock() raises during connect(), we never held the lock.
+    rollback() must not send <rollback>, and close() must not send <unlock>,
+    for a candidate another session may still be editing — otherwise a
+    failed lock (e.g. because another operator already has uncommitted
+    changes) turns into us discarding their work."""
+    rsp = etree.fromstring(_LOCK_RPC_ERROR_XML)
+    lock_err = LockError(rsp)
+
+    fake_device = MagicMock()
+    fake_device.open.return_value = None
+    monkeypatch.setattr("srxsync.transport.pyez.Device", lambda **kw: fake_device)
+    fake_config = MagicMock()
+    fake_config.lock.side_effect = lock_err
+    monkeypatch.setattr("srxsync.transport.pyez.Config", lambda dev, mode: fake_config)
+
+    t = PyEZTransport()
+    with pytest.raises(TransportError):
+        t.connect("198.51.100.1", "svc", password="FAKEPASS")
+
+    t.rollback()
+    t.close()
+
+    fake_config.rollback.assert_not_called()
+    fake_config.unlock.assert_not_called()

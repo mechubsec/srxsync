@@ -90,10 +90,13 @@ class Orchestrator:
     def _fetch_source(self) -> etree._Element:
         t = self._tx()
         secret = get_secret(host=self._inv.source.host, auth=self._inv.source.auth)
-        t.connect(
-            self._inv.source.host, secret.username, secret.password, ssh_key=secret.ssh_key_path
-        )
         try:
+            t.connect(
+                self._inv.source.host,
+                secret.username,
+                secret.password,
+                ssh_key=secret.ssh_key_path,
+            )
             return t.fetch(self._union_paths)
         finally:
             t.close()
